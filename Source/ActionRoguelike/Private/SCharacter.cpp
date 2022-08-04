@@ -4,6 +4,7 @@
 #include "SCharacter.h"
 #include "Camera/CameraComponent.h"
 #include "GameFramework/SpringArmComponent.h"
+#include "GameFramework/CharacterMovementComponent.h"
 
 // Sets default values
 ASCharacter::ASCharacter()
@@ -22,6 +23,10 @@ ASCharacter::ASCharacter()
 
 	CameraComp = CreateDefaultSubobject<UCameraComponent>("CameraComp");
 	CameraComp->SetupAttachment(SpringArmComp);
+
+	SpringArmComp->bUsePawnControlRotation = true; //让弹簧臂上的Camerta跟着PlayerControl的视角一起动
+	GetCharacterMovement()->bOrientRotationToMovement = true;//人物朝向会转向运动方向，避免扫射情况,include CharacterMovementComponent
+	bUseControllerRotationYaw = false;//取消人物方向随控制器（摄像机）方向移动
 }
 
 // Called when the game starts or when spawned
@@ -44,13 +49,47 @@ void ASCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputComponen
 	Super::SetupPlayerInputComponent(PlayerInputComponent);
 	//参数：按键名，对应编辑器中绑定按键时的名字；对象，一般是this；调用的函数，BindAxis时该函数需要传入参数float value
 	PlayerInputComponent->BindAxis("MoveForward", this, &ASCharacter::MoveForward);
+	PlayerInputComponent->BindAxis("MoveRight", this, &ASCharacter::MoveRight);
 
 	PlayerInputComponent->BindAxis("Turn", this, &APawn::AddControllerYawInput);
+	PlayerInputComponent->BindAxis("LookUp", this, &APawn::AddControllerPitchInput);
+
+	PlayerInputComponent->BindAction("PrimaryAttack",IE_Pressed,this,&ASCharacter::PrimaryAttack);
 }
 
 void ASCharacter::MoveForward(float value)
 {
-	//封装好的移动函数，在指定方向移动
-	AddMovementInput(GetActorForwardVector(),value);
+	//AddMovementInput(GetActorForwardVector(), value);封装好的移动函数，在指定方向移动
+	FRotator ControlRot = GetControlRotation();
+	ControlRot.Pitch = 0;
+	ControlRot.Roll = 0;
+	AddMovementInput(ControlRot.Vector(),value);
 }
 
+void ASCharacter::MoveRight(float value)
+{
+	/*AddMovementInput(GetActorRightVector(), value);
+	这句话会导致按D角色一直转圈，因为开启bOrientRotationToMovement后，ActorRightvector会一直改变
+	此时应改为获得Controller的Rotation，正确代码如下*/
+	FRotator ControlRot = GetControlRotation();
+	ControlRot.Pitch = 0;
+	ControlRot.Roll = 0;
+
+	FVector RightVector = FRotationMatrix(ControlRot).GetScaledAxis(EAxis::Y);
+	AddMovementInput(RightVector, value);
+}
+
+void ASCharacter::PrimaryAttack()
+{
+	FVector HandLocation = GetMesh()->GetSocketLocation("Muzzle_01");
+
+	FTransform SpawnTM = FTransform(GetControlRotation(), HandLocation);
+
+	FActorSpawnParameters SpawnParams;
+	//调整生成物生成时的碰撞检测：总是生成，及不管是否碰撞到人物
+	SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+	
+	//在Wrold下调用生成Actor的函数，
+	//第一个参数为类名，第二个为Transform矩阵,第三个是FActorSpawnParameters类，其中有很多生成Actor是需要的参数
+	GetWorld()->SpawnActor<AActor>(ProjectileClass, SpawnTM, SpawnParams);
+}
