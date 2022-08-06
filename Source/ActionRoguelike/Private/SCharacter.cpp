@@ -5,6 +5,8 @@
 #include "Camera/CameraComponent.h"
 #include "GameFramework/SpringArmComponent.h"
 #include "GameFramework/CharacterMovementComponent.h"
+#include "SInteractionComponent.h"
+#include "TimerManager.h"
 
 // Sets default values
 ASCharacter::ASCharacter()
@@ -13,7 +15,7 @@ ASCharacter::ASCharacter()
 	PrimaryActorTick.bCanEverTick = true;
 
 	/*
-	注意添加对应头文件，推荐使用Visual Assist插件，可一键插入头文件
+	注意添加对应头文件，推荐使用Visual Assist，插件，可一键插入头文件
 	使用CreateDefaultSubobject创建组件，<>中为创建类型，对应指针类型，（）中为组件的名字
 	并使用SetupAttachment将其附加到别的组件下
 	将Camerta附加到弹簧架下，可防止摄像头被物体阻挡：当摄像头被墙阻挡时，弹簧臂会回缩
@@ -27,6 +29,8 @@ ASCharacter::ASCharacter()
 	SpringArmComp->bUsePawnControlRotation = true; //让弹簧臂上的Camerta跟着PlayerControl的视角一起动
 	GetCharacterMovement()->bOrientRotationToMovement = true;//人物朝向会转向运动方向，避免扫射情况,include CharacterMovementComponent
 	bUseControllerRotationYaw = false;//取消人物方向随控制器（摄像机）方向移动
+
+	InteractionComp = CreateDefaultSubobject<USInteractionComponent>("InteractionComp");
 }
 
 // Called when the game starts or when spawned
@@ -54,7 +58,10 @@ void ASCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputComponen
 	PlayerInputComponent->BindAxis("Turn", this, &APawn::AddControllerYawInput);
 	PlayerInputComponent->BindAxis("LookUp", this, &APawn::AddControllerPitchInput);
 
+	PlayerInputComponent->BindAction("Jump", IE_Pressed, this, &ACharacter::Jump);
+
 	PlayerInputComponent->BindAction("PrimaryAttack",IE_Pressed,this,&ASCharacter::PrimaryAttack);
+	PlayerInputComponent->BindAction("PrimaryInteract", IE_Pressed, this, &ASCharacter::PrimaryInteract);
 }
 
 void ASCharacter::MoveForward(float value)
@@ -79,17 +86,40 @@ void ASCharacter::MoveRight(float value)
 	AddMovementInput(RightVector, value);
 }
 
+void ASCharacter::PrimaryInteract()
+{
+	if (InteractionComp)
+	{
+		InteractionComp->PrimaryInteract();
+	}
+}
+
 void ASCharacter::PrimaryAttack()
 {
-	FVector HandLocation = GetMesh()->GetSocketLocation("Muzzle_01");
+	PlayAnimMontage(AttackAnim);
 
-	FTransform SpawnTM = FTransform(GetControlRotation(), HandLocation);
+	GetWorldTimerManager().SetTimer(TimerHandle_PrimaryAttack, this, &ASCharacter::PrimaryAttack_TimeElapsed,0.2f);
+}
 
-	FActorSpawnParameters SpawnParams;
-	//调整生成物生成时的碰撞检测：总是生成，及不管是否碰撞到人物
-	SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
-	
-	//在Wrold下调用生成Actor的函数，
-	//第一个参数为类名，第二个为Transform矩阵,第三个是FActorSpawnParameters类，其中有很多生成Actor是需要的参数
-	GetWorld()->SpawnActor<AActor>(ProjectileClass, SpawnTM, SpawnParams);
+void ASCharacter::PrimaryAttack_TimeElapsed()
+{
+	/*用ensure代替check,UE自带的一个较温和的主动检查方式，且在打包好的游戏中不会触发
+	ensureAlways每次检查错误都会报错并暂停，
+	而ensure只会在第一次时报错*/
+	if (ensureAlways(ProjectileClass))
+	{
+		FVector HandLocation = GetMesh()->GetSocketLocation("Muzzle_01");
+
+		FTransform SpawnTM = FTransform(GetControlRotation(), HandLocation);
+
+		FActorSpawnParameters SpawnParams;
+		//调整生成物生成时的碰撞检测：总是生成，及不管是否碰撞到人物
+		SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+		//指定Instigator为当前角色
+		SpawnParams.Instigator = this;
+
+		//在Wrold下调用生成Actor的函数，
+		//第一个参数为类名，第二个为Transform矩阵,第三个是FActorSpawnParameters类，其中有很多生成Actor是需要的参数
+		GetWorld()->SpawnActor<AActor>(ProjectileClass, SpawnTM, SpawnParams);
+	}
 }
