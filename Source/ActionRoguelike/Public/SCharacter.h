@@ -40,6 +40,9 @@ protected:
 	UPROPERTY(VisibleAnywhere)
 	class USInteractionComponent* InteractionComp;
 
+	UPROPERTY(VisibleAnywhere,BlueprintReadOnly,Category = "Component")
+	class USAttributeComponent* AttributeComp;
+
 	void MoveForward(float value);
 	void MoveRight(float value);
 	void PrimaryAttack();//绑定Action不需要value参数
@@ -47,6 +50,17 @@ protected:
 
 	void PrimaryAttack_TimeElapsed();
 
+	UPROPERTY(EditAnywhere, Category = "Attack")
+	TSubclassOf<AActor> BlackHoleProjectileClass;
+	FTimerHandle TimerHandle_BlackholeAttack;
+	void BlackholeAttack();
+	void BlackholeAttack_TimeElapsed();
+
+	UPROPERTY(EditAnywhere, Category = "Attack")
+	TSubclassOf<AActor> DashProjectileClass;
+	FTimerHandle TimerHandle_Dash;
+	void Dash();
+	void Dash_TimeElapsed();
 public:	
 	// Called every frame
 	virtual void Tick(float DeltaTime) override;
@@ -54,5 +68,5 @@ public:
 	// Called to bind functionality to input
 	virtual void SetupPlayerInputComponent(class UInputComponent* PlayerInputComponent) override;
 
-
+	void SpawnProjectile(TSubclassOf<AActor> ClassToSpawn);
 };
