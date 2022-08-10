@@ -29,4 +29,8 @@ public:
 
 	UFUNCTION(BlueprintCallable,Category="Attribute")
 	bool ApplyHealthChange(float Delta);
+
+	//加上Const后，在蓝图中不再需要执行线
+	UFUNCTION(BlueprintCallable)
+	bool IsAlive() const;
 };

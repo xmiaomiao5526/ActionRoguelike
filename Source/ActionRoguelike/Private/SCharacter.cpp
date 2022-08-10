@@ -178,3 +178,18 @@ void ASCharacter::Dash_TimeElapsed()
 {
 	SpawnProjectile(DashProjectileClass);
 }
+
+void ASCharacter::OnHealthChanged(AActor* InstigatorAcotr, USAttributeComponent* OwningComp, float NewHealth, float Delta)
+{
+	if (NewHealth<=0.0f&&Delta<0.0f)
+	{
+		APlayerController* PC = Cast<APlayerController>(GetController());
+		DisableInput(PC);
+	}
+}
+
+void ASCharacter::PostInitializeComponents()
+{
+	Super::PostInitializeComponents();
+	AttributeComp->OnHealthChanged.AddDynamic(this, &ASCharacter::OnHealthChanged);
+}
