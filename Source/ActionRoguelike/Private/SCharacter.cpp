@@ -7,6 +7,8 @@
 #include "GameFramework/CharacterMovementComponent.h"
 #include "SInteractionComponent.h"
 #include "SAttributeComponent.h"
+#include "Kismet/GameplayStatics.h"
+#include "SActionComponent.h"
 
 // Sets default values
 ASCharacter::ASCharacter()
@@ -33,6 +35,10 @@ ASCharacter::ASCharacter()
 	InteractionComp = CreateDefaultSubobject<USInteractionComponent>("InteractionComp");
 
 	AttributeComp = CreateDefaultSubobject<USAttributeComponent>("AttributeComp");
+
+	ActionComp = CreateDefaultSubobject<USActionComponent>("ActionComp");
+
+	TimeToHitParamName = "TimeToHit";
 }
 
 // Called when the game starts or when spawned
@@ -67,6 +73,9 @@ void ASCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputComponen
 	PlayerInputComponent->BindAction("PrimaryAttack",IE_Pressed,this,&ASCharacter::PrimaryAttack);
 	PlayerInputComponent->BindAction("BlackholeAttack", IE_Pressed, this, &ASCharacter::BlackholeAttack);
 	PlayerInputComponent->BindAction("Dash", IE_Pressed, this, &ASCharacter::Dash);
+
+	PlayerInputComponent->BindAction("Sprint", IE_Pressed, this, &ASCharacter::SprintStart);
+	PlayerInputComponent->BindAction("Sprint", IE_Released, this, &ASCharacter::SprintStop);
 }
 
 
@@ -100,91 +109,46 @@ void ASCharacter::PrimaryInteract()
 	}
 }
 
-void ASCharacter::SpawnProjectile(TSubclassOf<AActor> ClassToSpawn)
-{
-	if (ensure(ClassToSpawn))
-	{
-		//同PrimaryAttack_TimeElapsed函数，对生成物进行初始化，包括位置、方向、生成方式、Instigator
-		FVector HandLocation = GetMesh()->GetSocketLocation("Muzzle_01");
-
-		FActorSpawnParameters SpawnParams;
-		SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
-		SpawnParams.Instigator = this;
-
-		//从摄像机出发的碰撞检测，检测摄像机方向上的WorldDynamic、WorldStatic、Pawn
-		FCollisionShape shape;
-		shape.SetSphere(20.0f);
-
-		FCollisionQueryParams QueryParams;
-		QueryParams.AddIgnoredActor(this);
-
-		FCollisionObjectQueryParams ObjParams;
-		ObjParams.AddObjectTypesToQuery(ECC_WorldDynamic);
-		ObjParams.AddObjectTypesToQuery(ECC_WorldStatic);
-		ObjParams.AddObjectTypesToQuery(ECC_Pawn);
-
-		FVector TraceStart = CameraComp->GetComponentLocation();
-
-		//traceEnd的默认初值
-		FVector traceEnd = CameraComp->GetComponentLocation() + (GetControlRotation().Vector() * 2500);
-
-		FHitResult Hit;
-
-		//如果光线追踪检测到了感兴趣的物体，将traceEnd的值修改为物体的值
-		if (GetWorld()->SweepSingleByObjectType(Hit, TraceStart, traceEnd, FQuat::Identity, ObjParams, shape, QueryParams))
-		{
-			//traceEnd = Hit.ImpactPoint;
-		}
-		//看不明白，但目的是获取手到物体的方向
-		FRotator ProjRotation = FRotationMatrix::MakeFromX(traceEnd - HandLocation).Rotator();
-
-		FTransform SpawnTM = FTransform(ProjRotation, HandLocation);
-		GetWorld()->SpawnActor<AActor>(ClassToSpawn, SpawnTM, SpawnParams);
-	}
-}
-
 void ASCharacter::PrimaryAttack()
 {
-	PlayAnimMontage(AttackAnim);
-
-	GetWorldTimerManager().SetTimer(TimerHandle_PrimaryAttack, this, &ASCharacter::PrimaryAttack_TimeElapsed, 0.2f);
+	ActionComp->StartActionByName(this, "PrimaryAttack");
 }
 
-void ASCharacter::PrimaryAttack_TimeElapsed()
-{
-	SpawnProjectile(ProjectileClass);
-}
 
 void ASCharacter::BlackholeAttack()
 {
-	PlayAnimMontage(AttackAnim);
-
-	GetWorldTimerManager().SetTimer(TimerHandle_BlackholeAttack, this, &ASCharacter::BlackholeAttack_TimeElapsed, 0.2f);
+	ActionComp->StartActionByName(this, "BlackholeAttack");
 }
 
-void ASCharacter::BlackholeAttack_TimeElapsed()
-{
-	SpawnProjectile(BlackHoleProjectileClass);
-}
 
 void ASCharacter::Dash()
 {
-	PlayAnimMontage(AttackAnim);
-
-	GetWorldTimerManager().SetTimer(TimerHandle_Dash, this, &ASCharacter::Dash_TimeElapsed, 0.2f);
+	ActionComp->StartActionByName(this, "Dash");
 }
 
-void ASCharacter::Dash_TimeElapsed()
+
+void ASCharacter::SprintStart()
 {
-	SpawnProjectile(DashProjectileClass);
+	ActionComp->StartActionByName(this, "Sprint");
+}
+
+void ASCharacter::SprintStop()
+{
+	ActionComp->StopActionByName(this, "Sprint");
 }
 
 void ASCharacter::OnHealthChanged(AActor* InstigatorAcotr, USAttributeComponent* OwningComp, float NewHealth, float Delta)
 {
+	if (Delta < 0.f)
+	{
+		GetMesh()->SetScalarParameterValueOnMaterials(TimeToHitParamName, GetWorld()->TimeSeconds);
+	}
 	if (NewHealth<=0.0f&&Delta<0.0f)
 	{
 		APlayerController* PC = Cast<APlayerController>(GetController());
 		DisableInput(PC);
+
+		SetLifeSpan(5.f);
 	}
 }
 
@@ -193,3 +157,15 @@ void ASCharacter::PostInitializeComponents()
 	Super::PostInitializeComponents();
 	AttributeComp->OnHealthChanged.AddDynamic(this, &ASCharacter::OnHealthChanged);
 }
+
+void ASCharacter::HealSelf(float Amount /* = 100 */)
+{
+	AttributeComp->ApplyHealthChange(this, Amount);
+}
+
+FVector ASCharacter::GetPawnViewLocation() const
+{
+	//加一点小值是为了修正摄像机被阻挡时的位置
+	return CameraComp->GetComponentLocation() +(GetControlRotation().Vector() * 50);
+}
+

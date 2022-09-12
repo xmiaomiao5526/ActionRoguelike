@@ -19,53 +19,49 @@ protected:
 	// Called when the game starts or when spawned
 	virtual void BeginPlay() override;
 
-	UPROPERTY(EditAnywhere, Category = "Attack")
-	TSubclassOf<AActor> ProjectileClass;
-
-	UPROPERTY(EditAnywhere, Category="Attack")
-	class UAnimMontage* AttackAnim;
-
-	FTimerHandle TimerHandle_PrimaryAttack;
+	UPROPERTY(VisibleAnywhere,Category = "Effects")
+	FName TimeToHitParamName;
 	
 	/*告诉编译器UCameraComponent和USpringArmComponent是class，即可不在头文件中inlucde这两个头文件，从而加快编译速度
 	添加UPROPERTY()宏将两个组件暴露给编辑器，设置权限为VisibleAnywhere*/
 	//添加弹簧架组件
-	UPROPERTY(VisibleAnywhere)
+	UPROPERTY(VisibleAnywhere, Category = "Components")
 	class USpringArmComponent* SpringArmComp;
 
 	//添加摄像头组件
-	UPROPERTY(VisibleAnywhere)
+	UPROPERTY(VisibleAnywhere, Category = "Components")
 	class UCameraComponent* CameraComp;
 
-	UPROPERTY(VisibleAnywhere)
+	UPROPERTY(VisibleAnywhere, Category = "Components")
 	class USInteractionComponent* InteractionComp;
 
-	UPROPERTY(VisibleAnywhere,BlueprintReadOnly,Category = "Component")
+	UPROPERTY(VisibleAnywhere,BlueprintReadOnly,Category = "Components")
 	class USAttributeComponent* AttributeComp;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components")
+	class USActionComponent* ActionComp;
 
 	void MoveForward(float value);
 	void MoveRight(float value);
 	void PrimaryAttack();//绑定Action不需要value参数
 	void PrimaryInteract();
 
-	void PrimaryAttack_TimeElapsed();
-
-	UPROPERTY(EditAnywhere, Category = "Attack")
-	TSubclassOf<AActor> BlackHoleProjectileClass;
-	FTimerHandle TimerHandle_BlackholeAttack;
 	void BlackholeAttack();
-	void BlackholeAttack_TimeElapsed();
 
-	UPROPERTY(EditAnywhere, Category = "Attack")
-	TSubclassOf<AActor> DashProjectileClass;
-	FTimerHandle TimerHandle_Dash;
 	void Dash();
-	void Dash_TimeElapsed();
+
+	void SprintStart();
+	void SprintStop();
 
 	UFUNCTION()
 	void OnHealthChanged(AActor* InstigatorAcotr, USAttributeComponent* OwningComp, float NewHealth, float Delta);
 
 	virtual void PostInitializeComponents() override;
+
+	void StartAttackEffects();
+	
+	//在第三人称时最好重写成获得摄像机的位置，（默认是人物位置）
+	virtual FVector GetPawnViewLocation() const override;
 public:	
 	// Called every frame
 	virtual void Tick(float DeltaTime) override;
@@ -73,5 +69,6 @@ public:
 	// Called to bind functionality to input
 	virtual void SetupPlayerInputComponent(class UInputComponent* PlayerInputComponent) override;
 
-	void SpawnProjectile(TSubclassOf<AActor> ClassToSpawn);
+	UFUNCTION(Exec)
+	void HealSelf(float Amount = 100);
 };

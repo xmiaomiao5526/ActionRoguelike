@@ -4,17 +4,18 @@
 #include "SInteractionComponent.h"
 #include "SGameplayInterface.h"
 #include "DrawDebugHelpers.h"
+#include "Camera/CameraComponent.h"
+#include "SWorldUserWidget.h"
 
 // Sets default values for this component's properties
 USInteractionComponent::USInteractionComponent()
 {
-	// Set this component to be initialized when the game starts, and to be ticked every frame.  You can turn these features
-	// off to improve performance if you don't need them.
 	PrimaryComponentTick.bCanEverTick = true;
 
-	// ...
+	TraceRadius = 30.f;
+	TraceDistance = 500.f;
+	CollisionChannel = ECC_WorldDynamic;
 }
-
 
 // Called when the game starts
 void USInteractionComponent::BeginPlay()
@@ -31,13 +32,19 @@ void USInteractionComponent::TickComponent(float DeltaTime, ELevelTick TickType,
 {
 	Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
 
-	// ...
+	//目前每帧运行，开销较大，之后优化时可设一个定时器
+	APawn* MyPawn = Cast<APawn>(GetOwner());
+	if (MyPawn->IsLocallyControlled())
+	{
+		FindBestInteractable();
+	}
+	
 }
 
-void USInteractionComponent::PrimaryInteract()
+void USInteractionComponent::FindBestInteractable()
 {
 	FCollisionObjectQueryParams ObjectQueryParams;
-	ObjectQueryParams.AddObjectTypesToQuery(ECC_WorldDynamic);
+	ObjectQueryParams.AddObjectTypesToQuery(CollisionChannel);
 
 	AActor* MyOwner = GetOwner();
 
@@ -45,23 +52,21 @@ void USInteractionComponent::PrimaryInteract()
 	FRotator EyeRotation;
 	MyOwner->GetActorEyesViewPoint(EyeLocation, EyeRotation);
 
-	FVector End = EyeLocation + (EyeRotation.Vector() * 1000);
+	FVector End = EyeLocation + (EyeRotation.Vector() * TraceDistance);
 
-	//FHitResult Hit;
-	//bool bBlockingHit = GetWorld()->LineTraceSingleByObjectType(Hit, EyeLocation, End, ObjectQueryParams);
+	UCameraComponent* Camera = Cast<UCameraComponent>(MyOwner->GetComponentByClass(UCameraComponent::StaticClass()));
 
 	TArray<FHitResult> Hits;
 
-	float Radius = 30.f;
-
 	FCollisionShape Shape;
-	Shape.SetSphere(Radius);
+	Shape.SetSphere(TraceRadius);
 	//球形碰撞扫射，返回所有碰撞到的物品
 	bool bBlockingHit = GetWorld()->SweepMultiByObjectType(Hits, EyeLocation, End, FQuat::Identity, ObjectQueryParams, Shape);
 	FColor LinearColor = bBlockingHit ? FColor::Green : FColor::Red;
 
+	FocusedActor = nullptr;
 	//循环遍历被球体碰撞到的物体
-	for (FHitResult Hit:Hits)
+	for (FHitResult Hit : Hits)
 	{
 		AActor* HitActor = Hit.GetActor();
 
@@ -69,12 +74,56 @@ void USInteractionComponent::PrimaryInteract()
 		{
 			if (HitActor->Implements<USGameplayInterface>())
 			{
-				APawn* MyPawn = Cast<APawn>(MyOwner);
-				ISGameplayInterface::Execute_Interact(HitActor, MyPawn);
+				FocusedActor = HitActor;
 				break;
 			}
 		}
-		DrawDebugSphere(GetWorld(), Hit.ImpactPoint, Radius, 32, LinearColor, false, 2.0f);
+		//DrawDebugSphere(GetWorld(), Hit.ImpactPoint, TraceRadius, 32, LinearColor, false, 2.0f);
 	}
-	DrawDebugLine(GetWorld(), EyeLocation, End, LinearColor, false, 2.0f, 0, 2.0f);
+	if (FocusedActor)
+	{
+		//单例(懒汉)模式
+		if (DefaultWidgetInstance == nullptr && ensure(DefaultWidgetClass))
+		{
+			DefaultWidgetInstance = CreateWidget<USWorldUserWidget>(GetWorld(), DefaultWidgetClass);
+		}
+		 if (DefaultWidgetInstance)
+		 {
+			 DefaultWidgetInstance->AttachedActor = FocusedActor;
+
+			 if (!DefaultWidgetInstance->IsInViewport())
+			 {
+				 DefaultWidgetInstance->AddToViewport();
+			 }
+		 }
+	}
+	else
+	{
+		if (DefaultWidgetInstance)
+		{
+			DefaultWidgetInstance->RemoveFromParent();
+		}
+	}
+
+	//DrawDebugLine(GetWorld(), EyeLocation, End, LinearColor, false, 2.0f, 0, 2.0f);
+}
+
+void USInteractionComponent::PrimaryInteract()
+{
+	ServerInteract(FocusedActor);
+}
+
+//仅仅需要传递指针即可，尽管这看上去不太可能，因为服务器和客户端中的内存存储方式肯定是不一样的
+//但引擎会自动帮我们把指针指向的Object的类似ID的东西发送过去，即可解决此问题
+void USInteractionComponent::ServerInteract_Implementation(AActor* InFocus)
+{
+	if (InFocus == nullptr)
+	{
+		GEngine->AddOnScreenDebugMessage(-1, 1.f, FColor::Red, "No Focus Actor to interact.");
+		return;
+	}
+
+	APawn* MyPawn = Cast<APawn>(GetOwner());
+
+	ISGameplayInterface::Execute_Interact(InFocus, MyPawn);
 }

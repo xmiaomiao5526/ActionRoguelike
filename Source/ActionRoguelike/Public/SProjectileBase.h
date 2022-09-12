@@ -28,6 +28,8 @@ protected:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components")
 	class UParticleSystemComponent* EffectComp;
 
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Components")
+	class UAudioComponent* AudioComp;
 	//设为virtual可以在子类中重写该函数
 	UFUNCTION()
 	virtual	void OnActorHit(UPrimitiveComponent* HitComponent, AActor* OtherActor, UPrimitiveComponent* OtherComp, FVector NormalImpulse, const FHitResult& SweepResult);

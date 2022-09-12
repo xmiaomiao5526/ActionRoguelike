@@ -6,6 +6,9 @@
 #include "Particles/ParticleSystemComponent.h"
 #include "GameFramework/ProjectileMovementComponent.h"
 #include "SAttributeComponent.h"
+#include "SGameplayFunctionLibrary.h"
+#include "SActionComponent.h"
+#include "SActionEffect.h"
 
 // Sets default values
 ASMagicProjectile::ASMagicProjectile()
@@ -28,18 +31,43 @@ ASMagicProjectile::ASMagicProjectile()
 
 	//If true, the initial Velocity is interpreted as being in local space upon startup.
 	MovementComp->bInitialVelocityInLocalSpace = true;
+
+	Damage = 20;
+
+	SetReplicates(true);
 }
 
 void ASMagicProjectile::OnActorOverlap(UPrimitiveComponent* OverlappedComponent, AActor* OtherActor, UPrimitiveComponent* OtherComp, int32 OtherBodyIndex, bool bFromSweep, const FHitResult& SweepResult)
 {
 	if (OtherActor && OtherActor!= GetInstigator())
 	{
-		USAttributeComponent* AttributeComp = Cast<USAttributeComponent>(OtherActor->GetComponentByClass(USAttributeComponent::StaticClass()));
-		if (AttributeComp)
+		//在调用HasTag时，不允许传入FName，如HasTag("Parrying")，可用以下办法进行硬编码
+		
+		//static FGameplayTag Tag = FGameplayTag::RequestGameplayTag("Parrying");
+		//HasTag(Tag);
+
+		USActionComponent* ActionComp = Cast<USActionComponent>(OtherActor->GetComponentByClass(USActionComponent::StaticClass()));
+		if (ActionComp && ActionComp->ActiveGameplayTags.HasTag(ParryTag))
 		{
-			AttributeComp->ApplyHealthChange(-20.0f);
+			//在之前设置了MovementComp->bRotationFollowsVelocity = true，因此速度反转时，Rotation也会反转
+			MovementComp->Velocity = -MovementComp->Velocity;
+
+			//改变飞弹的Instigator，使其看作是玩家射出，即能对AI造成伤害，并return，不执行后续的爆炸
+			SetInstigator(Cast<APawn>(OtherActor));
+			return;
+		}
+
+		if (USGameplayFunctionLibrary::ApplyDirectionalDamage(GetInstigator(), OtherActor, Damage, SweepResult)
+			&& USGameplayFunctionLibrary::ApplyRage(GetInstigator(), OtherActor, Damage))
+		{
+			
 			Destroy();
 		}
+		if (ActionComp)
+		{
+			ActionComp->AddAction(GetInstigator(), BurningActionClass);
+		}
+
 	}
 }
 

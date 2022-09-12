@@ -6,11 +6,11 @@
 #include "Particles/ParticleSystemComponent.h"
 #include "GameFramework/ProjectileMovementComponent.h"
 #include "Kismet/GameplayStatics.h"
+#include "Components/AudioComponent.h"
 
 // Sets default values
 ASProjectileBase::ASProjectileBase()
 {
-
 	SphereComp = CreateDefaultSubobject<USphereComponent>("SphereComp");
 	RootComponent = SphereComp;
 	SphereComp->SetCollisionProfileName("Projectile");
@@ -19,11 +19,16 @@ ASProjectileBase::ASProjectileBase()
 	EffectComp = CreateDefaultSubobject<UParticleSystemComponent>("EffectComp");
 	EffectComp->SetupAttachment(SphereComp);
 
+	AudioComp = CreateDefaultSubobject<UAudioComponent>("Sound");
+	AudioComp->SetupAttachment(RootComponent);
+
 	MovementComp = CreateDefaultSubobject<UProjectileMovementComponent>("MovementComp");
 	MovementComp->InitialSpeed = 8000.0f;
 	MovementComp->bRotationFollowsVelocity = true;
 	MovementComp->bInitialVelocityInLocalSpace = true;
 	MovementComp->ProjectileGravityScale = 0.0f;
+
+	SetReplicates(true);
 }
 
 void ASProjectileBase::OnActorHit(UPrimitiveComponent* HitComponent, AActor* OtherActor, UPrimitiveComponent* OtherComp, FVector NormalImpulse, const FHitResult& SweepResult)

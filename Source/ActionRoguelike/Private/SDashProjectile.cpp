@@ -48,4 +48,5 @@ void ASDashProjectile::TeleportInstigator()
 		//使用TeleportTo来传送人物更安全一点，其中封装了众多检查，包括传送后的空间、碰撞等
 		ActorToTeleport->TeleportTo(GetActorLocation(), ActorToTeleport->GetActorRotation(), false, false);
 	}
+	Destroy();
 }

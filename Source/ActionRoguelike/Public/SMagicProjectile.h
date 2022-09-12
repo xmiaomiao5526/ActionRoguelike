@@ -4,6 +4,7 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
+#include "GameplayTagContainer.h"
 #include "SMagicProjectile.generated.h"
 
 UCLASS()
@@ -30,6 +31,16 @@ protected:
 
 	UPROPERTY(VisibleAnywhere)
 	class UParticleSystemComponent* EffectComp;
+
+	UPROPERTY(EditDefaultsOnly,Category = "Damage")
+	float Damage;
+
+	UPROPERTY(EditDefaultsOnly, Category = "Damage")
+	FGameplayTag ParryTag;
+
+	UPROPERTY(EditDefaultsOnly, Category = "Damage")
+	TSubclassOf<class USActionEffect> BurningActionClass;
+
 public:	
 	// Called every frame
 	virtual void Tick(float DeltaTime) override;
